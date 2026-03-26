@@ -2,8 +2,8 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MoneyManager SMA | Kelola Uang Harian</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>MoneyManager SMA | Kelola Uang Harian + Investasi</title>
     <style>
         * {
             margin: 0;
@@ -723,331 +723,133 @@
     </div>
 
     <script>
-        // Data Structure
+        // Data utama
         let dailyMoney = 0;
-        let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
-        let investments = JSON.parse(localStorage.getItem('investments')) || [];
-        let dailyAllocations = JSON.parse(localStorage.getItem('dailyAllocations')) || [];
-        let selectedInvestment = 'rdpu'; // rdpu or emas
+        let transactions = [];
+        let investments = [];
+        let dailyAllocations = [];
+        let allocations = { food: 60, transport: 20, saving: 10, invest: 10 };
+        let selectedInvestment = 'rdpu';
         let historyFilter = 'all';
-        
-        // Allocation percentages
-        let allocations = JSON.parse(localStorage.getItem('allocations')) || {
-            food: 60,
-            transport: 20,
-            saving: 10,
-            invest: 10
-        };
-        
-        // Initialize
-        function init() {
-            // Load daily money
-            let savedDailyMoney = localStorage.getItem('dailyMoney');
-            if (savedDailyMoney) {
-                dailyMoney = parseInt(savedDailyMoney);
-                document.getElementById('dailyMoneyInput').value = dailyMoney;
-            }
-            updateDailyInfo();
-            
-            initSliders();
-            render();
+
+        // Helper: Load data dari localStorage
+        function loadData() {
+            dailyMoney = parseInt(localStorage.getItem('dailyMoney')) || 0;
+            transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+            investments = JSON.parse(localStorage.getItem('investments')) || [];
+            dailyAllocations = JSON.parse(localStorage.getItem('dailyAllocations')) || [];
+            const savedAlloc = localStorage.getItem('allocations');
+            if (savedAlloc) allocations = JSON.parse(savedAlloc);
+            // Pastikan tabungan dan dana investasi terpisah
+            if (localStorage.getItem('savings') === null) localStorage.setItem('savings', 0);
+            if (localStorage.getItem('investmentFund') === null) localStorage.setItem('investmentFund', 0);
         }
-        
-        // Set daily money
-        function setDailyMoney() {
-            let input = document.getElementById('dailyMoneyInput').value;
-            let newDailyMoney = parseInt(input);
-            
-            if (isNaN(newDailyMoney) || newDailyMoney <= 0) {
-                alert('Masukkan jumlah uang harian yang valid!');
-                return;
-            }
-            
-            dailyMoney = newDailyMoney;
+
+        function saveAll() {
             localStorage.setItem('dailyMoney', dailyMoney);
-            updateDailyInfo();
-            updateAllocationDisplay();
-            alert(`Uang harian berhasil diubah menjadi ${formatRupiah(dailyMoney)} per hari!`);
-        }
-        
-        // Update daily info display
-        function updateDailyInfo() {
-            document.getElementById('currentDaily').textContent = formatRupiah(dailyMoney);
-        }
-        
-        // Initialize sliders
-        function initSliders() {
-            document.getElementById('foodSlider').value = allocations.food;
-            document.getElementById('transportSlider').value = allocations.transport;
-            document.getElementById('savingSlider').value = allocations.saving;
-            document.getElementById('investSlider').value = allocations.invest;
-            
-            updateAllocationDisplay();
-        }
-        
-        // Update allocation display
-        function updateAllocationDisplay() {
-            const food = parseInt(document.getElementById('foodSlider').value);
-            const transport = parseInt(document.getElementById('transportSlider').value);
-            const saving = parseInt(document.getElementById('savingSlider').value);
-            const invest = parseInt(document.getElementById('investSlider').value);
-            
-            document.getElementById('foodPercent').textContent = food + '%';
-            document.getElementById('transportPercent').textContent = transport + '%';
-            document.getElementById('savingPercent').textContent = saving + '%';
-            document.getElementById('investPercent').textContent = invest + '%';
-            
-            const foodAmount = (dailyMoney * food / 100);
-            const transportAmount = (dailyMoney * transport / 100);
-            const savingAmount = (dailyMoney * saving / 100);
-            const investAmount = (dailyMoney * invest / 100);
-            
-            document.getElementById('previewFood').textContent = formatRupiah(foodAmount);
-            document.getElementById('previewTransport').textContent = formatRupiah(transportAmount);
-            document.getElementById('previewSaving').textContent = formatRupiah(savingAmount);
-            document.getElementById('previewInvest').textContent = formatRupiah(investAmount);
-            document.getElementById('previewTotal').textContent = formatRupiah(dailyMoney);
-        }
-        
-        // Apply allocation
-        function applyAllocation() {
-            allocations = {
-                food: parseInt(document.getElementById('foodSlider').value),
-                transport: parseInt(document.getElementById('transportSlider').value),
-                saving: parseInt(document.getElementById('savingSlider').value),
-                invest: parseInt(document.getElementById('investSlider').value)
-            };
-            
-            // Validate total
-            const total = allocations.food + allocations.transport + allocations.saving + allocations.invest;
-            if (total !== 100) {
-                alert('Total alokasi harus 100%! Saat ini total: ' + total + '%');
-                return;
-            }
-            
-            localStorage.setItem('allocations', JSON.stringify(allocations));
-            
-            const today = new Date().toDateString();
-            const todayAllocation = dailyAllocations.find(a => a.date === today);
-            
-            if (todayAllocation) {
-                if (confirm('Anda sudah menerapkan alokasi hari ini. Apakah ingin mengganti?')) {
-                    // Remove old allocation and its contributions
-                    dailyAllocations = dailyAllocations.filter(a => a.date !== today);
-                    // Remove contributions from savings and investments
-                    let currentSavings = getTotalSavings();
-                    let currentInvestmentFund = getInvestmentFund();
-                    localStorage.setItem('savings', currentSavings - todayAllocation.savingAmount);
-                    localStorage.setItem('investmentFund', currentInvestmentFund - todayAllocation.investAmount);
-                } else {
-                    return;
-                }
-            }
-            
-            const foodAmount = dailyMoney * allocations.food / 100;
-            const transportAmount = dailyMoney * allocations.transport / 100;
-            const savingAmount = dailyMoney * allocations.saving / 100;
-            const investAmount = dailyMoney * allocations.invest / 100;
-            
-            const newAllocation = {
-                id: Date.now(),
-                date: today,
-                dailyMoney: dailyMoney,
-                foodAmount: foodAmount,
-                transportAmount: transportAmount,
-                savingAmount: savingAmount,
-                investAmount: investAmount,
-                foodPercent: allocations.food,
-                transportPercent: allocations.transport,
-                savingPercent: allocations.saving,
-                investPercent: allocations.invest
-            };
-            
-            dailyAllocations.push(newAllocation);
+            localStorage.setItem('transactions', JSON.stringify(transactions));
+            localStorage.setItem('investments', JSON.stringify(investments));
             localStorage.setItem('dailyAllocations', JSON.stringify(dailyAllocations));
-            
-            // Add to savings and investments
-            if (savingAmount > 0) {
-                addToSavings(savingAmount);
-            }
-            if (investAmount > 0) {
-                addToInvestmentFund(investAmount);
-            }
-            
-            saveAndRender();
-            alert(`Alokasi uang harian ${formatRupiah(dailyMoney)} berhasil diterapkan!`);
+            localStorage.setItem('allocations', JSON.stringify(allocations));
         }
-        
-        // Add to savings
-        function addToSavings(amount) {
-            let savings = JSON.parse(localStorage.getItem('savings')) || 0;
-            savings += amount;
-            localStorage.setItem('savings', savings);
+
+        function formatRupiah(amount) {
+            if (isNaN(amount)) amount = 0;
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
         }
-        
-        // Add to investment fund
-        function addToInvestmentFund(amount) {
-            let investmentFund = JSON.parse(localStorage.getItem('investmentFund')) || 0;
-            investmentFund += amount;
-            localStorage.setItem('investmentFund', investmentFund);
-        }
-        
-        // Add transaction
-        function addTransaction() {
-            const name = document.getElementById('transactionName').value.trim();
-            const amount = parseInt(document.getElementById('transactionAmount').value);
-            const type = document.getElementById('transactionType').value;
-            
-            if (!name) {
-                alert('Masukkan nama transaksi!');
-                return;
-            }
-            if (!amount || amount <= 0) {
-                alert('Masukkan jumlah yang valid!');
-                return;
-            }
-            
-            const newTransaction = {
-                id: Date.now(),
-                name: name,
-                amount: amount,
-                type: type,
-                date: new Date().toLocaleDateString('id-ID'),
-                timestamp: new Date().getTime()
-            };
-            
-            transactions.push(newTransaction);
-            saveAndRender();
-            
-            document.getElementById('transactionName').value = '';
-            document.getElementById('transactionAmount').value = '';
-        }
-        
-        // Delete transaction
-        function deleteTransaction(id) {
-            transactions = transactions.filter(t => t.id !== id);
-            saveAndRender();
-        }
-        
-        // Select investment type
-        function selectInvestment(type) {
-            selectedInvestment = type;
-            document.querySelectorAll('.investment-card').forEach(card => {
-                card.classList.remove('selected');
-            });
-            document.querySelector(`[data-invest="${type}"]`).classList.add('selected');
-        }
-        
-        // Add investment
-        function addInvestment() {
-            let amount = parseInt(document.getElementById('investAmount').value);
-            if (!amount || amount <= 0) {
-                alert('Masukkan jumlah investasi yang valid!');
-                return;
-            }
-            
-            // Check if enough balance in investment fund
-            let investmentFund = getInvestmentFund();
-            if (amount > investmentFund) {
-                alert(`Dana investasi tidak mencukupi! Dana tersedia: ${formatRupiah(investmentFund)}\n\nTips: Kumpulkan dana dari alokasi harian terlebih dahulu.`);
-                return;
-            }
-            
-            // Calculate return based on investment type
-            let returnRate = selectedInvestment === 'rdpu' ? 0.05 : 0.10; // 5% for RDPU, 10% for gold
-            let estimatedReturn = amount * returnRate;
-            
-            const newInvestment = {
-                id: Date.now(),
-                type: selectedInvestment === 'rdpu' ? 'Reksadana Pasar Uang' : 'Emas Batangan',
-                amount: amount,
-                estimatedReturn: estimatedReturn,
-                date: new Date().toLocaleDateString('id-ID'),
-                month: new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' }),
-                timestamp: new Date().getTime()
-            };
-            
-            investments.push(newInvestment);
-            
-            // Deduct from investment fund
-            investmentFund -= amount;
-            localStorage.setItem('investmentFund', investmentFund);
-            
-            saveAndRender();
-            document.getElementById('investAmount').value = '50000';
-            alert(`Investasi ${formatRupiah(amount)} berhasil! Estimasi return tahunan: ${formatRupiah(estimatedReturn)}`);
-        }
-        
-        // Calculate total income
+
         function getTotalIncome() {
-            let income = 0;
-            // Add daily allocations
-            dailyAllocations.forEach(a => {
-                income += a.dailyMoney;
-            });
-            // Add other income
-            transactions.filter(t => t.type === 'income').forEach(t => {
-                income += t.amount;
-            });
+            let income = dailyAllocations.reduce((sum, a) => sum + a.dailyMoney, 0);
+            income += transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
             return income;
         }
-        
-        // Calculate total expense
+
         function getTotalExpense() {
-            let expense = 0;
-            transactions.filter(t => t.type === 'expense').forEach(t => {
-                expense += t.amount;
-            });
-            return expense;
+            return transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
         }
-        
-        // Get total savings
+
         function getTotalSavings() {
-            return JSON.parse(localStorage.getItem('savings')) || 0;
+            return parseInt(localStorage.getItem('savings')) || 0;
         }
-        
-        // Get total investment (including returns)
-        function getTotalInvestment() {
+
+        function getInvestmentFund() {
+            return parseInt(localStorage.getItem('investmentFund')) || 0;
+        }
+
+        function getTotalInvestmentValue() {
             let total = 0;
             investments.forEach(inv => {
                 total += inv.amount;
-                total += inv.estimatedReturn;
+                if (inv.estimatedReturn) total += inv.estimatedReturn;
             });
             return total;
         }
-        
-        // Get investment fund balance
-        function getInvestmentFund() {
-            return JSON.parse(localStorage.getItem('investmentFund')) || 0;
+
+        function addToSavings(amount) {
+            let current = getTotalSavings();
+            localStorage.setItem('savings', current + amount);
         }
-        
-        // Format Rupiah
-        function formatRupiah(amount) {
-            return new Intl.NumberFormat('id-ID', {
-                style: 'currency',
-                currency: 'IDR',
-                minimumFractionDigits: 0
-            }).format(amount);
+
+        function addToInvestmentFund(amount) {
+            let current = getInvestmentFund();
+            localStorage.setItem('investmentFund', current + amount);
         }
-        
-        // Filter history
-        function filterHistory(filter) {
-            historyFilter = filter;
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.getAttribute('data-filter') === filter) {
-                    btn.classList.add('active');
-                }
-            });
-            renderHistory();
+
+        // Update UI angka dan daftar transaksi
+        function renderDashboard() {
+            document.getElementById('totalIncome').innerText = formatRupiah(getTotalIncome());
+            document.getElementById('totalExpense').innerText = formatRupiah(getTotalExpense());
+            document.getElementById('totalSaving').innerText = formatRupiah(getTotalSavings());
+            document.getElementById('totalInvestment').innerText = formatRupiah(getTotalInvestmentValue());
+            document.getElementById('currentDaily').innerText = formatRupiah(dailyMoney);
+            document.getElementById('dailyMoneyInput').value = dailyMoney || '';
         }
-        
-        // Render history
+
+        function renderTransactions() {
+            const container = document.getElementById('transactionList');
+            const recent = [...transactions].reverse().slice(0, 15);
+            if (recent.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Belum ada transaksi</div>';
+                return;
+            }
+            container.innerHTML = recent.map(t => `
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        <span class="transaction-name">${escapeHtml(t.name)}</span>
+                        <span class="transaction-date">${t.date || '-'}</span>
+                    </div>
+                    <div class="transaction-amount ${t.type}">
+                        ${t.type === 'income' ? '+' : '-'} ${formatRupiah(t.amount)}
+                    </div>
+                    <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑️</button>
+                </div>
+            `).join('');
+        }
+
+        function renderInvestments() {
+            const container = document.getElementById('investmentList');
+            if (investments.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 1rem;">Belum ada investasi</div>';
+                return;
+            }
+            container.innerHTML = investments.map(inv => `
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        <span class="transaction-name">${inv.type}</span>
+                        <span class="transaction-date">${inv.date}</span>
+                        <small>Estimasi return: ${formatRupiah(inv.estimatedReturn)}/tahun</small>
+                    </div>
+                    <div class="transaction-amount invest">
+                        ${formatRupiah(inv.amount)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
         function renderHistory() {
             const historyList = document.getElementById('historyList');
             let filtered = [...dailyAllocations];
             const now = new Date();
-            
             if (historyFilter === 'week') {
                 const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
                 filtered = filtered.filter(a => new Date(a.date) >= weekAgo);
@@ -1055,14 +857,11 @@
                 const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                 filtered = filtered.filter(a => new Date(a.date) >= monthAgo);
             }
-            
-            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-            
+            filtered.sort((a,b) => new Date(b.date) - new Date(a.date));
             if (filtered.length === 0) {
                 historyList.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Belum ada riwayat alokasi</div>';
                 return;
             }
-            
             historyList.innerHTML = filtered.map(a => `
                 <div class="transaction-item">
                     <div class="transaction-info">
@@ -1076,114 +875,231 @@
                 </div>
             `).join('');
         }
-        
-        // Render all
-        function render() {
-            // Update dashboard
-            document.getElementById('totalIncome').textContent = formatRupiah(getTotalIncome());
-            document.getElementById('totalExpense').textContent = formatRupiah(getTotalExpense());
-            document.getElementById('totalSaving').textContent = formatRupiah(getTotalSavings());
-            document.getElementById('totalInvestment').textContent = formatRupiah(getTotalInvestment());
-            
-            // Render transactions
-            const transactionList = document.getElementById('transactionList');
-            const recentTransactions = [...transactions].reverse().slice(0, 10);
-            
-            if (recentTransactions.length === 0) {
-                transactionList.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Belum ada transaksi</div>';
-            } else {
-                transactionList.innerHTML = recentTransactions.map(t => `
-                    <div class="transaction-item">
-                        <div class="transaction-info">
-                            <span class="transaction-name">${t.name}</span>
-                            <span class="transaction-date">${t.date}</span>
-                        </div>
-                        <div class="transaction-amount ${t.type}">
-                            ${t.type === 'income' ? '+' : '-'} ${formatRupiah(t.amount)}
-                        </div>
-                        <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑️</button>
-                    </div>
-                `).join('');
-            }
-            
-            // Render investments
-            const investmentList = document.getElementById('investmentList');
-            if (investments.length === 0) {
-                investmentList.innerHTML = '<div style="text-align: center; color: #999; padding: 1rem;">Belum ada investasi</div>';
-            } else {
-                investmentList.innerHTML = investments.map(inv => `
-                    <div class="transaction-item">
-                        <div class="transaction-info">
-                            <span class="transaction-name">${inv.type}</span>
-                            <span class="transaction-date">${inv.date}</span>
-                            <small>Estimasi return: ${formatRupiah(inv.estimatedReturn)}/tahun</small>
-                        </div>
-                        <div class="transaction-amount invest">
-                            ${formatRupiah(inv.amount)}
-                        </div>
-                    </div>
-                `).join('');
-            }
-            
+
+        function fullRender() {
+            renderDashboard();
+            renderTransactions();
+            renderInvestments();
             renderHistory();
         }
-        
-        // Save and render
-        function saveAndRender() {
-            localStorage.setItem('transactions', JSON.stringify(transactions));
-            localStorage.setItem('investments', JSON.stringify(investments));
-            render();
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
         }
-        
-        // Reset all data
-        function resetAllData() {
+
+        // Set uang harian
+        window.setDailyMoney = function() {
+            let val = parseInt(document.getElementById('dailyMoneyInput').value);
+            if (isNaN(val) || val <= 0) {
+                alert('Masukkan jumlah uang harian yang valid!');
+                return;
+            }
+            dailyMoney = val;
+            localStorage.setItem('dailyMoney', dailyMoney);
+            updateAllocationDisplay();
+            renderDashboard();
+            alert(`Uang harian berhasil diubah menjadi ${formatRupiah(dailyMoney)} per hari!`);
+        };
+
+        // Sliders display
+        function updateAllocationDisplay() {
+            const food = parseInt(document.getElementById('foodSlider').value);
+            const transport = parseInt(document.getElementById('transportSlider').value);
+            const saving = parseInt(document.getElementById('savingSlider').value);
+            const invest = parseInt(document.getElementById('investSlider').value);
+            document.getElementById('foodPercent').innerText = food+'%';
+            document.getElementById('transportPercent').innerText = transport+'%';
+            document.getElementById('savingPercent').innerText = saving+'%';
+            document.getElementById('investPercent').innerText = invest+'%';
+            
+            const totalDaily = dailyMoney || 0;
+            const foodAmount = totalDaily * food / 100;
+            const transportAmount = totalDaily * transport / 100;
+            const savingAmount = totalDaily * saving / 100;
+            const investAmount = totalDaily * invest / 100;
+            document.getElementById('previewFood').innerText = formatRupiah(foodAmount);
+            document.getElementById('previewTransport').innerText = formatRupiah(transportAmount);
+            document.getElementById('previewSaving').innerText = formatRupiah(savingAmount);
+            document.getElementById('previewInvest').innerText = formatRupiah(investAmount);
+            document.getElementById('previewTotal').innerText = formatRupiah(totalDaily);
+        }
+
+        window.applyAllocation = function() {
+            if (!dailyMoney || dailyMoney <= 0) {
+                alert('Atur uang harian terlebih dahulu!');
+                return;
+            }
+            const food = parseInt(document.getElementById('foodSlider').value);
+            const transport = parseInt(document.getElementById('transportSlider').value);
+            const saving = parseInt(document.getElementById('savingSlider').value);
+            const invest = parseInt(document.getElementById('investSlider').value);
+            const total = food+transport+saving+invest;
+            if (total !== 100) {
+                alert(`Total alokasi harus 100%! Saat ini ${total}%`);
+                return;
+            }
+            allocations = { food, transport, saving, invest };
+            localStorage.setItem('allocations', JSON.stringify(allocations));
+            
+            const today = new Date().toLocaleDateString('id-ID');
+            const existingIdx = dailyAllocations.findIndex(a => a.date === today);
+            if (existingIdx !== -1) {
+                if (!confirm('Alokasi hari ini sudah ada. Ganti dengan yang baru?')) return;
+                // hapus kontribusi lama dari tabungan & dana investasi
+                const old = dailyAllocations[existingIdx];
+                let currSave = getTotalSavings();
+                let currFund = getInvestmentFund();
+                localStorage.setItem('savings', Math.max(0, currSave - old.savingAmount));
+                localStorage.setItem('investmentFund', Math.max(0, currFund - old.investAmount));
+                dailyAllocations.splice(existingIdx,1);
+            }
+            
+            const foodAmount = dailyMoney * food / 100;
+            const transportAmount = dailyMoney * transport / 100;
+            const savingAmount = dailyMoney * saving / 100;
+            const investAmount = dailyMoney * invest / 100;
+            
+            const newAlloc = {
+                id: Date.now(),
+                date: today,
+                dailyMoney: dailyMoney,
+                foodAmount, transportAmount, savingAmount, investAmount,
+                foodPercent: food, transportPercent: transport, savingPercent: saving, investPercent: invest
+            };
+            dailyAllocations.push(newAlloc);
+            localStorage.setItem('dailyAllocations', JSON.stringify(dailyAllocations));
+            
+            if (savingAmount > 0) addToSavings(savingAmount);
+            if (investAmount > 0) addToInvestmentFund(investAmount);
+            
+            saveAll();
+            fullRender();
+            alert(`Alokasi berhasil! ${formatRupiah(dailyMoney)} terbagi sesuai rencana.`);
+        };
+
+        window.addTransaction = function() {
+            const name = document.getElementById('transactionName').value.trim();
+            const amount = parseInt(document.getElementById('transactionAmount').value);
+            const type = document.getElementById('transactionType').value;
+            if (!name) { alert('Nama transaksi harus diisi'); return; }
+            if (!amount || amount <= 0) { alert('Jumlah tidak valid'); return; }
+            
+            const newTrans = {
+                id: Date.now(),
+                name: name,
+                amount: amount,
+                type: type,
+                date: new Date().toLocaleDateString('id-ID'),
+                timestamp: Date.now()
+            };
+            transactions.push(newTrans);
+            saveAll();
+            fullRender();
+            document.getElementById('transactionName').value = '';
+            document.getElementById('transactionAmount').value = '';
+        };
+
+        window.deleteTransaction = function(id) {
+            transactions = transactions.filter(t => t.id !== id);
+            saveAll();
+            fullRender();
+        };
+
+        window.selectInvestment = function(type) {
+            selectedInvestment = type;
+            document.querySelectorAll('.investment-card').forEach(card => card.classList.remove('selected'));
+            document.querySelector(`[data-invest="${type}"]`).classList.add('selected');
+        };
+
+        window.addInvestment = function() {
+            let amount = parseInt(document.getElementById('investAmount').value);
+            if (!amount || amount <= 0) { alert('Jumlah investasi tidak valid'); return; }
+            let fund = getInvestmentFund();
+            if (amount > fund) {
+                alert(`Dana investasi tidak cukup! Tersedia: ${formatRupiah(fund)}\nKumpulkan dulu dari alokasi harian.`);
+                return;
+            }
+            const returnRate = selectedInvestment === 'rdpu' ? 0.05 : 0.10;
+            const estimatedReturn = Math.floor(amount * returnRate);
+            const newInv = {
+                id: Date.now(),
+                type: selectedInvestment === 'rdpu' ? 'Reksadana Pasar Uang' : 'Emas Batangan',
+                amount: amount,
+                estimatedReturn: estimatedReturn,
+                date: new Date().toLocaleDateString('id-ID'),
+                month: new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' }),
+                timestamp: Date.now()
+            };
+            investments.push(newInv);
+            // kurangi dana investasi
+            localStorage.setItem('investmentFund', fund - amount);
+            saveAll();
+            fullRender();
+            document.getElementById('investAmount').value = '50000';
+            alert(`Investasi ${formatRupiah(amount)} berhasil! Estimasi return tahunan ${formatRupiah(estimatedReturn)}`);
+        };
+
+        window.filterHistory = function(filter) {
+            historyFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if(btn.getAttribute('data-filter') === filter) btn.classList.add('active');
+            });
+            renderHistory();
+        };
+
+        window.resetAllData = function() {
+            dailyMoney = 0;
             transactions = [];
             investments = [];
             dailyAllocations = [];
             allocations = { food: 60, transport: 20, saving: 10, invest: 10 };
-            dailyMoney = ;
-            
-            localStorage.setItem('transactions', JSON.stringify(transactions));
-            localStorage.setItem('investments', JSON.stringify(investments));
-            localStorage.setItem('dailyAllocations', JSON.stringify(dailyAllocations));
+            localStorage.setItem('dailyMoney', 0);
+            localStorage.setItem('transactions', JSON.stringify([]));
+            localStorage.setItem('investments', JSON.stringify([]));
+            localStorage.setItem('dailyAllocations', JSON.stringify([]));
             localStorage.setItem('allocations', JSON.stringify(allocations));
             localStorage.setItem('savings', 0);
             localStorage.setItem('investmentFund', 0);
-            localStorage.setItem('dailyMoney', dailyMoney);
-            
-            document.getElementById('dailyMoneyInput').value = dailyMoney;
-            initSliders();
-            render();
+            document.getElementById('foodSlider').value = 60;
+            document.getElementById('transportSlider').value = 20;
+            document.getElementById('savingSlider').value = 10;
+            document.getElementById('investSlider').value = 10;
+            updateAllocationDisplay();
+            fullRender();
             closeModal();
             alert('Semua data telah direset!');
+        };
+
+        function initSliders() {
+            document.getElementById('foodSlider').value = allocations.food;
+            document.getElementById('transportSlider').value = allocations.transport;
+            document.getElementById('savingSlider').value = allocations.saving;
+            document.getElementById('investSlider').value = allocations.invest;
+            updateAllocationDisplay();
         }
-        
-        // Modal functions
-        function showResetModal() {
-            document.getElementById('resetModal').classList.add('active');
-        }
-        
-        function closeModal() {
-            document.getElementById('resetModal').classList.remove('active');
-        }
-        
-        // Event listeners for sliders
+
+        window.showResetModal = function() { document.getElementById('resetModal').classList.add('active'); };
+        window.closeModal = function() { document.getElementById('resetModal').classList.remove('active'); };
+
+        // Event listener sliders
         document.getElementById('foodSlider').addEventListener('input', updateAllocationDisplay);
         document.getElementById('transportSlider').addEventListener('input', updateAllocationDisplay);
         document.getElementById('savingSlider').addEventListener('input', updateAllocationDisplay);
         document.getElementById('investSlider').addEventListener('input', updateAllocationDisplay);
-        
-        // Initialize
-        init();
+
+        // inisialisasi
+        loadData();
+        initSliders();
+        fullRender();
         selectInvestment('rdpu');
-        
-        // Close modal on click outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('resetModal');
-            if (event.target === modal) {
-                closeModal();
-            }
-        }
+        window.onclick = function(e) { if (e.target === document.getElementById('resetModal')) closeModal(); };
     </script>
 </body>
 </html>
